@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     host: str = "0.0.0.0"
     port: int = 8000
-    default_admin_email: str = "admin@saas.local"
+    default_admin_email: str = "admin@saas.example"
     default_admin_password: str = "admin123"
 
     @property

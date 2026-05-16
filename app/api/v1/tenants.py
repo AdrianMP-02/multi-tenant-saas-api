@@ -5,11 +5,13 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from app.api.deps import AuthUser, get_current_user, get_db, verify_tenant_membership
 from app.core.exceptions import ConflictError, NotFoundError
-from app.crud.tenant import create_tenant, delete_tenant, get_tenant, get_tenants, update_tenant
+from app.crud.tenant import create_tenant, delete_tenant, delete_tenants, get_tenant, get_tenants, update_tenant
 from app.crud.user import create_tenant_user
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.tenant import TenantCreateRequest, TenantResponse, TenantUpdateRequest
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
@@ -20,7 +22,11 @@ async def list_tenants(
     db: AsyncSession = Depends(get_db),
     current_user: AuthUser = Depends(get_current_user),
 ):
-    return await get_tenants(db)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    user = user_result.scalar_one_or_none()
+    if user and user.is_superadmin:
+        return await get_tenants(db)
+    return await get_tenants(db, user_id=current_user.id)
 
 
 @router.post("/", response_model=TenantResponse, status_code=201)
@@ -82,3 +88,24 @@ async def delete_tenant_endpoint(
     success = await delete_tenant(db, tenant_id=tenant_id)
     if not success:
         raise NotFoundError("Tenant not found")
+
+
+@router.post("/bulk-delete", status_code=200)
+async def bulk_delete_tenants(
+    body: list[uuid.UUID],
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user),
+):
+    deletable: list[uuid.UUID] = []
+    for tid in body:
+        try:
+            await verify_tenant_membership(tid, current_user, db)
+            deletable.append(tid)
+        except Exception:
+            pass
+
+    if not deletable:
+        return {"deleted": 0}
+
+    deleted = await delete_tenants(db, deletable)
+    return {"deleted": deleted}

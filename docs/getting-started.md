@@ -52,7 +52,7 @@ On first startup, the system creates a default superadmin account:
 
 | Field | Value |
 |---|---|
-| Email | `admin@saas.local` |
+| Email | `admin@saas.example` |
 | Password | `admin123` |
 
 **Change these in production** via the `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` environment variables.

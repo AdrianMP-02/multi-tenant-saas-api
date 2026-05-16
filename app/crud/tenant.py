@@ -8,10 +8,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import create_schema
 from app.models.tenant import Tenant, TenantStatus
+from app.models.user import TenantUser
 
 
-async def get_tenants(db: AsyncSession) -> Sequence[Tenant]:
-    result = await db.execute(select(Tenant).order_by(Tenant.created_at.desc()))
+async def get_tenants(db: AsyncSession, user_id: uuid.UUID | None = None) -> Sequence[Tenant]:
+    if user_id:
+        result = await db.execute(
+            select(Tenant)
+            .join(TenantUser, TenantUser.tenant_id == Tenant.id)
+            .where(TenantUser.user_id == user_id, TenantUser.status == "active")
+            .order_by(Tenant.created_at.desc())
+        )
+    else:
+        result = await db.execute(select(Tenant).order_by(Tenant.created_at.desc()))
     return result.scalars().all()
 
 
@@ -85,3 +94,17 @@ async def delete_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> bool:
     await db.delete(tenant)
     await db.commit()
     return True
+
+
+async def delete_tenants(db: AsyncSession, tenant_ids: list[uuid.UUID]) -> int:
+    from app.database import drop_schema
+
+    deleted = 0
+    for tid in tenant_ids:
+        tenant = await get_tenant(db, tenant_id=tid)
+        if tenant:
+            await drop_schema(tenant.schema_name)
+            await db.delete(tenant)
+            deleted += 1
+    await db.commit()
+    return deleted

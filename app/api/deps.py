@@ -65,7 +65,12 @@ async def verify_tenant_membership(
     tenant_id: uuid.UUID,
     current_user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> TenantUser:
+) -> TenantUser | None:
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    user = user_result.scalar_one_or_none()
+    if user and user.is_superadmin:
+        return None
+
     result = await db.execute(
         select(TenantUser).where(
             TenantUser.tenant_id == tenant_id,
